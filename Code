@@ -1,0 +1,84 @@
+import cv2 as cv
+import numpy as np
+
+# Video capture from webcam (change index if using a different camera)
+cap = cv.VideoCapture(0)
+
+# Configuration parameters
+wXh = 320  # Resolution
+confThold = 0.5  # Confidence threshold
+nmsThershold = 0.3  # NMS threshold
+
+# File paths for class names, YOLOv3 configuration, and weights
+classesFile = 'coco.names'
+modelsconfig = 'yolov3.cfg'
+modelsweight = 'yolov3.weights'
+
+# Lists to hold class names
+classNames = []
+classNamest = []
+
+# Read class names from files
+with open(classesFile, 'rt') as f:
+    classNames = f.read().rstrip('\n').split('\n')
+
+with open(classesFilet, 'rt') as f:  # Fix typo in variable name
+    classNamest = f.read().rstrip('\n').split('\n')
+
+# Load YOLOv3 model
+net = cv.dnn.readNetFromDarknet(modelsconfig, modelsweight)
+net.setPreferableBackend(cv.dnn.DNN_BACKEND_OPENCV)
+net.setPreferableTarget(cv.dnn.DNN_TARGET_CPU)
+
+# Function to find objects and annotate the frame
+def findObjects(outputs, img):
+    hX, wX, cX = img.shape
+    bbox = []
+    classIds = []
+    classIdst = []
+    confs = []
+    
+    for output in outputs:
+        for det in output:
+            scores = det[5:]
+            classId = np.argmax(scores)
+            confidence = scores[classId]
+            if confidence > confThold:
+                w,h = int(det[2]*wX) , int(det[3]*hX)
+                x,y = int((det[0]*wX)-w/2) , int((det[1]*hX)-h/2)
+                bbox.append([x,y,w,h])
+                classIds.append(classId)
+                classIdst.append(classId)
+                confs.append(float(confidence))
+
+    indices = cv.dnn.NMSBoxes(bbox,confs,confThold,nmsThershold)
+    
+    for i in indices:
+        i = 0
+        box = bbox[i]
+        x,y,w,h = box[0], box[1], box[2], box[3]
+        cv.rectangle(img,(x,y),(x+w,y+h),(500,50,1000),1)
+        cv.putText(img,f'{classNames[classIds[i]].upper()} {int (confs[i]*100)}%',(x,y-10),cv.FONT_HERSHEY_SIMPLEX,0.6,(1000,0,0),2)
+        detectionns = classNamest[classIdst[i]]
+
+# Main loop for object detection
+while True:
+    success, img = cap.read()  # Capture frame from webcam
+
+    blob = cv.dnn.blobFromImage(img, 1 / 255, (wXh, wXh), [0, 0, 0], 1, crop=False)
+    net.setInput(blob)
+
+    layerNames = net.getLayerNames()
+    outputNames = [layerNames[i - 1] for i in net.getUnconnectedOutLayers()]
+    
+    outputs = net.forward(outputNames)  # Get predictions
+    
+    findObjects(outputs, img)  # Find objects and annotate frame
+    
+    cv.imshow('Window', img)  # Display annotated frame
+    if cv.waitKey(1) == ord('q'):  # Exit loop on 'q' key
+        break
+
+# Release video capture and close windows
+cap.release()
+cv.destroyAllWindows()
